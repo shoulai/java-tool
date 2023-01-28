@@ -1,0 +1,115 @@
+package org.example;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+public class HttpUtl {
+
+  public static void main(String[] args) {
+        String url = "http://localhost:9090/test";
+
+        Map<String, Object> param = new HashMap<>();
+        param.put("username", "aaaaaaa");
+
+        String jsonParam = JSON.toJSONString(param);
+
+        String formPost = doFormPost(url, jsonParam);
+        System.out.println(formPost);
+
+
+    }
+
+    /**
+     * post请求 带file,map是其余参数
+     */
+
+    public static String doFormPost(String uri, String param) {
+        Map<String, Object> keyValues = JSONObject.parseObject(param);
+        String result = null;
+        DataOutputStream out = null;
+        BufferedReader reader = null;
+        final String BOUNDARY_PREFIX = "--";
+        /**
+         * 回车换行,用于一行的结尾
+         */
+        final String LINE_END = "\r\n";
+
+        try {
+            URL url = new URL(uri);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            //设置超时时间
+            conn.setConnectTimeout(50000);
+            conn.setReadTimeout(50000);
+            //允许输入流
+            conn.setDoInput(true);
+            //允许输出流
+            conn.setDoOutput(true);
+            //不允许使用缓存
+            conn.setUseCaches(false);
+            //请求方式
+            conn.setRequestMethod("POST");
+            //设置编码 utf-8
+            conn.setRequestProperty("Charset", "UTF-8");
+            //设置为长连接
+            conn.setRequestProperty("connection", "keep-alive");
+
+            //分隔符，可以任意设置
+            String boundary = UUID.randomUUID().toString().replaceAll("-", "");
+            //设置 Content-Type 为 multipart/form-data; boundary=${boundary}
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            out = new DataOutputStream(conn.getOutputStream());
+            //发送普通参数
+            if (keyValues != null && !keyValues.isEmpty()) {
+                for (Map.Entry<String, Object> entry : keyValues.entrySet()) {
+                    //写分隔符--${boundary}，并回车换行
+                    String boundaryStr = BOUNDARY_PREFIX + boundary + LINE_END;
+                    out.write(boundaryStr.getBytes());
+                    //写描述信息：Content-Disposition: form-data; name="参数名"，并两个回车换行
+                    String contentDispositionStr = String.format("Content-Disposition: form-data; name=\"%s\"", entry.getKey()) + LINE_END + LINE_END;
+                    out.write(contentDispositionStr.getBytes());
+                    //写具体内容：参数值，并回车换行
+                    String valueStr = entry.getValue().toString() + LINE_END;
+                    out.write(valueStr.getBytes());
+                }
+            }
+
+            //写结尾的分隔符--${boundary}--,然后回车换行
+            String endStr = BOUNDARY_PREFIX + boundary + BOUNDARY_PREFIX + LINE_END;
+
+            out.write(endStr.getBytes());
+            reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            StringBuilder responseContent = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                responseContent.append(line);
+            }
+            result = responseContent.toString();
+        } catch (Exception e) {
+            System.out.println("异常：" + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            try {
+                if (out != null) {
+                    out.close();
+
+                }
+                if (reader != null) {
+                    reader.close();
+                }
+            } catch (IOException e) {
+
+            }
+        }
+
+        return result;
+    }
